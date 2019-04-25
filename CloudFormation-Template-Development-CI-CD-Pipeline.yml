@@ -312,7 +312,6 @@ Resources:
                   Service:
                     - events.amazonaws.com
                 Action: sts:AssumeRole
-          Path: /
           Policies:
             -
               PolicyName: cwe-pipeline-execution
