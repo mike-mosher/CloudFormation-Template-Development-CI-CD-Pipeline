@@ -409,4 +409,4 @@ Resources:
 Outputs:
     CodeCommitGitCloneCommand:
       Description: Git clone command for CodeCommit repo
-      Value: !GetAtt CodeCommitRepository.CloneUrlHttp
+      Value: !Join ['', ['git clone ', !GetAtt CodeCommitRepository.CloneUrlHttp]]

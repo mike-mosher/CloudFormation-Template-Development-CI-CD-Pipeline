@@ -31,6 +31,12 @@ This template creates the following:
 
 --- 
 
+## Use
+
+`aws cloudformation create-stack --stack-name CloudFormation-Template-Development-CI-CD-Pipeline --template-body file://CloudFormation-Template-Development-CI-CD-Pipeline.yml --capabilities CAPABILITY_NAMED_IAM`
+
+---
+
 ## Purpose
 
 Having a CI/CD Pipeline for CloudFormation template creation is extremely useful.  You can begin building your template in the `template.yml` file in the git repo, and as each resource is added (or a small group of resources) you can do the following:
