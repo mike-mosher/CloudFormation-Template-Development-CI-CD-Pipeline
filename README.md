@@ -3,8 +3,6 @@
 ## Summary
 CloudFormation template to create CI/CD Pipeline used to continuously develop CloudFormation templates.
 
----
-
 ## Description
 
 This template creates the following:
@@ -29,13 +27,9 @@ This template creates the following:
     - During stack deletion:
         - removes all objects from the S3 bucket so that it can successfully be deleted by the CloudFormation stack 
 
---- 
-
 ## Use
 
 `aws cloudformation create-stack --stack-name CloudFormation-Template-Development-CI-CD-Pipeline --template-body file://CloudFormation-Template-Development-CI-CD-Pipeline.yml --capabilities CAPABILITY_NAMED_IAM`
-
----
 
 ## Purpose
 
@@ -51,4 +45,3 @@ Once the CodeCommit repo has a new commit, the Pipeline is triggered and will pe
 
 This way you can continually add to the template and know that the resources that you have created are able to successfully launch without issues.
 
----
