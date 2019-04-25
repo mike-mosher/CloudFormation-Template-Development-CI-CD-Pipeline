@@ -288,7 +288,7 @@ Resources:
             Role: !GetAtt CustomResourceLambdaExecutionRole.Arn
             Layers:
                 # Because we cannot call CodeCommit client.create_commit() in the super old version of boto3 provided by default in Lambda functions (boto3-1.9.42)
-                - arn:aws:lambda:us-west-2:803222876536:layer:Klayers-python37-boto3:1  # This layer is in my account.  Need to replace with the public lambda layer for boto3 provided in Klayers project as soon as the owner creates it.  See: https://github.com/keithrozario/Klayers/issues/26
+                - arn:aws:lambda:us-west-2:113088814899:layer:Klayers-python37-boto3:1
 
     CustomResource:
         Type: Custom::CustomResource

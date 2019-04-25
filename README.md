@@ -52,9 +52,3 @@ Once the CodeCommit repo has a new commit, the Pipeline is triggered and will pe
 This way you can continually add to the template and know that the resources that you have created are able to successfully launch without issues.
 
 ---
-
-## Known issues:
-
-- Lambda function for Custom Resource is performing a CreateCommit API call to CodeCommit using the boto3 SDK. However, the boto3 package that is provided to lambda functions by default is so out of date that this method is unsupported.  I have created a Lambda layer in my account to provide the function with an updated version of boto3 
-- Currently the [Klayers project](https://github.com/keithrozario/Klayers) on GitHub is working to add a public Lambda layer for boto3.  Once this is finished, I will update the template to reference that public Lambda layer.  
-- See GitHub Issue: https://github.com/keithrozario/Klayers/issues/26
