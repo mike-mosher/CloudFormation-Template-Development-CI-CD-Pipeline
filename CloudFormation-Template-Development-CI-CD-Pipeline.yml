@@ -1,0 +1,413 @@
+Description: CloudFormation Template Development CI/CD Pipeline
+Parameters:
+    ResourceBaseName:
+        Type: String
+        Description: Base name that will be applied to most resource names (ie CodePipeline, S3 Bucket, CodeCommit Repo, etc)
+        Default: cloudformation-template-development
+    DeployStageCFNStackName:
+        Type: String
+        Description: Name of the CloudFormation stack that is created in the Deploy stage of the pipeline
+        Default: Test-CloudFormation-Template
+
+Resources:
+    PipelineServiceRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: !Sub "${ResourceBaseName}-CodePipeline-Service-Role"
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: codepipeline.amazonaws.com
+                      Action:
+                          - sts:AssumeRole
+            Policies:
+                -
+                    PolicyName: "CodePipelinePolicy" # https://docs.aws.amazon.com/codepipeline/latest/userguide/how-to-custom-role.html#view-default-service-role-policy
+                    PolicyDocument:
+                        Version: '2012-10-17'
+                        Statement:
+                            -
+                                Action:
+                                    - 'iam:PassRole'
+                                Resource: '*'
+                                Effect: Allow
+                                Condition:
+                                    StringEqualsIfExists:
+                                        'iam:PassedToService':
+                                            - cloudformation.amazonaws.com
+                                            - elasticbeanstalk.amazonaws.com
+                                            - ec2.amazonaws.com
+                                            - ecs-tasks.amazonaws.com
+                            -
+                                Action:
+                                    - 'codecommit:CancelUploadArchive'
+                                    - 'codecommit:GetBranch'
+                                    - 'codecommit:GetCommit'
+                                    - 'codecommit:GetUploadArchiveStatus'
+                                    - 'codecommit:UploadArchive'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Action:
+                                    - 'codedeploy:CreateDeployment'
+                                    - 'codedeploy:GetApplication'
+                                    - 'codedeploy:GetApplicationRevision'
+                                    - 'codedeploy:GetDeployment'
+                                    - 'codedeploy:GetDeploymentConfig'
+                                    - 'codedeploy:RegisterApplicationRevision'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Action:
+                                    - 'elasticbeanstalk:*'
+                                    - 'ec2:*'
+                                    - 'elasticloadbalancing:*'
+                                    - 'autoscaling:*'
+                                    - 'cloudwatch:*'
+                                    - 's3:*'
+                                    - 'sns:*'
+                                    - 'cloudformation:*'
+                                    - 'rds:*'
+                                    - 'sqs:*'
+                                    - 'ecs:*'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Action:
+                                    - 'lambda:InvokeFunction'
+                                    - 'lambda:ListFunctions'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Action:
+                                    - 'opsworks:CreateDeployment'
+                                    - 'opsworks:DescribeApps'
+                                    - 'opsworks:DescribeCommands'
+                                    - 'opsworks:DescribeDeployments'
+                                    - 'opsworks:DescribeInstances'
+                                    - 'opsworks:DescribeStacks'
+                                    - 'opsworks:UpdateApp'
+                                    - 'opsworks:UpdateStack'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Action:
+                                    - 'cloudformation:CreateStack'
+                                    - 'cloudformation:DeleteStack'
+                                    - 'cloudformation:DescribeStacks'
+                                    - 'cloudformation:UpdateStack'
+                                    - 'cloudformation:CreateChangeSet'
+                                    - 'cloudformation:DeleteChangeSet'
+                                    - 'cloudformation:DescribeChangeSet'
+                                    - 'cloudformation:ExecuteChangeSet'
+                                    - 'cloudformation:SetStackPolicy'
+                                    - 'cloudformation:ValidateTemplate'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Action:
+                                    - 'codebuild:BatchGetBuilds'
+                                    - 'codebuild:StartBuild'
+                                Resource: '*'
+                                Effect: Allow
+                            -
+                                Effect: Allow
+                                Action:
+                                    - 'devicefarm:ListProjects'
+                                    - 'devicefarm:ListDevicePools'
+                                    - 'devicefarm:GetRun'
+                                    - 'devicefarm:GetUpload'
+                                    - 'devicefarm:CreateUpload'
+                                    - 'devicefarm:ScheduleRun'
+                                Resource: '*'
+                            -
+                                Effect: Allow
+                                Action:
+                                    - 'servicecatalog:ListProvisioningArtifacts'
+                                    - 'servicecatalog:CreateProvisioningArtifact'
+                                    - 'servicecatalog:DescribeProvisioningArtifact'
+                                    - 'servicecatalog:DeleteProvisioningArtifact'
+                                    - 'servicecatalog:UpdateProduct'
+                                Resource: '*'
+                            -
+                                Effect: Allow
+                                Action:
+                                    - 'cloudformation:ValidateTemplate'
+                                Resource: '*'
+                            -
+                                Effect: Allow
+                                Action:
+                                    - 'ecr:DescribeImages'
+                                Resource: '*'
+
+    PipelineDeployStageCFNRole:
+        Type: AWS::IAM::Role
+        Properties:
+            RoleName: !Sub "${ResourceBaseName}-CodePipeline-Deploy-CFN-Role"
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: cloudformation.amazonaws.com
+                      Action:
+                          - sts:AssumeRole
+            ManagedPolicyArns:
+                - arn:aws:iam::aws:policy/AdministratorAccess
+
+    CustomResourceLambdaExecutionRole:
+        Type: 'AWS::IAM::Role'
+        Properties:
+            AssumeRolePolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                    - Effect: Allow
+                      Principal:
+                          Service: lambda.amazonaws.com
+                      Action:
+                          - 'sts:AssumeRole'
+            Policies:
+                - PolicyName: LoggingPolicy
+                  PolicyDocument:
+                      Version: 2012-10-17
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - logs:CreateLogGroup
+                                - logs:CreateLogStream
+                                - logs:PutLogEvents
+                            Resource: '*'
+                - PolicyName: CodeCommitPolicy
+                  PolicyDocument:
+                      Version: 2012-10-17
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - codecommit:CreateCommit
+                            Resource: '*'
+                - PolicyName: S3Policy
+                  PolicyDocument:
+                      Version: 2012-10-17
+                      Statement:
+                          - Effect: Allow
+                            Action:
+                                - s3:List*
+                                - s3:DeleteObject
+                            Resource: '*'
+
+    CustomResourceLambdaFunction:
+        Type: 'AWS::Lambda::Function'
+        Properties:
+            Code:
+                ZipFile: |
+                    import cfnresponse
+                    import boto3
+
+                    def handler(event, context):
+                        print(event)
+                        print('boto version ' + boto3.__version__)
+
+                        # Globals
+                        responseData = {}
+                        ResponseStatus = cfnresponse.SUCCESS
+                        codeCommitRepoName = event['ResourceProperties']['codeCommitRepoName']
+                        s3bucketName = event['ResourceProperties']['s3bucketName']
+
+                        if event['RequestType'] == 'Create':
+
+                            # need to push two files to codecommit repo in an init commit: ['template.yml', 'input-params.json']
+
+                            cc = boto3.client('codecommit')
+
+                            input_params_file_content = """\
+                            {
+                                "Parameters": {
+                                    "Param1": "Value1",
+                                    "Param2": "Value2"
+                                }
+                            }
+                            """
+
+                            template_content = """\
+                            AWSTemplateFormatVersion: 2010-09-09
+                            Description:
+                            Metadata:
+
+                            Parameters:
+
+                            Mappings:
+
+                            Conditions:
+
+                            Resources:
+
+                            Outputs:
+                            """
+
+                            response = cc.create_commit(
+                                repositoryName=codeCommitRepoName,
+                                branchName='master',
+                                authorName='Mike Mosher',
+                                email='mikmoshe@amazon.com',
+                                commitMessage='init commit',
+                                putFiles=[
+                                    {
+                                        'filePath': 'input-params.json',
+                                        'fileContent': input_params_file_content
+                                    },
+                                    {
+                                        'filePath': 'template.yml',
+                                        'fileContent': template_content
+                                    }
+                                ]
+                            )
+
+                            if not response['ResponseMetadata']['HTTPStatusCode'] == 200:
+                                ResponseStatus = cfnresponse.FAILURE
+                                responseData['Message'] = "init code commit failed"
+
+                            responseData['Message'] = "Resource creation successful!"
+
+                        elif event['RequestType'] == 'Update':
+                            responseData['Message'] = "Resource update successful!"
+
+                        elif event['RequestType'] == 'Delete':
+                            # Need to empty the S3 bucket before it is deleted
+                            s3 = boto3.resource('s3')
+                            bucket = s3.Bucket(s3bucketName)
+                            bucket.objects.all().delete()
+
+                            responseData['Message'] = "Resource deletion successful!"
+
+                        cfnresponse.send(event, context, ResponseStatus, responseData)
+
+            Handler: index.handler
+            Runtime: python3.7
+            Role: !GetAtt CustomResourceLambdaExecutionRole.Arn
+            Layers:
+                # Because we cannot call CodeCommit client.create_commit() in the super old version of boto3 provided by default in Lambda functions (boto3-1.9.42)
+                - arn:aws:lambda:us-west-2:803222876536:layer:Klayers-python37-boto3:1  # This layer is in my account.  Need to replace with the public lambda layer for boto3 provided in Klayers project as soon as the owner creates it.  See: https://github.com/keithrozario/Klayers/issues/26
+
+    CustomResource:
+        Type: Custom::CustomResource
+        Properties:
+            ServiceToken: !GetAtt CustomResourceLambdaFunction.Arn
+            s3bucketName: !Ref ArtifactS3Bucket
+            codeCommitRepoName: !GetAtt CodeCommitRepository.Name
+        DependsOn:
+            - CodeCommitRepository
+            - ArtifactS3Bucket
+
+    CloudWatchEventRole:
+        Type: AWS::IAM::Role
+        Properties:
+          AssumeRolePolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              -
+                Effect: Allow
+                Principal:
+                  Service:
+                    - events.amazonaws.com
+                Action: sts:AssumeRole
+          Path: /
+          Policies:
+            -
+              PolicyName: cwe-pipeline-execution
+              PolicyDocument:
+                Version: 2012-10-17
+                Statement:
+                  -
+                    Effect: Allow
+                    Action: codepipeline:StartPipelineExecution
+                    Resource: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+
+    ArtifactS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        AccessControl: Private
+        BucketName: !Sub "${ResourceBaseName}-bucket"
+
+    CodeCommitRepository:
+        Type: AWS::CodeCommit::Repository
+        Properties:
+            RepositoryName: !Sub "${ResourceBaseName}-CodeCommit-Repo"
+
+    CWEvent:
+        Type: AWS::Events::Rule
+        Properties:
+            Description: Amazon CloudWatch Events rule to automatically start your pipeline when a change occurs in the AWS CodeCommit source repository and branch.
+            EventPattern: {
+                'source': ['aws.codecommit'],
+                'detail-type': ['CodeCommit Repository State Change'],
+                'resources': [ !GetAtt CodeCommitRepository.Arn ],
+                'detail': {
+                    'event': ['referenceCreated', 'referenceUpdated'],
+                    'referenceType': ['branch'],
+                    'referenceName': ['master']
+                }
+            }
+            Name: !Sub "${ResourceBaseName}-CW-Event"
+            Targets:
+                -
+                    Id: !Sub "CWE-${ResourceBaseName}"
+                    Arn: !Sub "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+                    RoleArn: !GetAtt CloudWatchEventRole.Arn
+        DependsOn: CustomResource
+
+    Pipeline:
+        Type: AWS::CodePipeline::Pipeline
+        Properties:
+            Name: !Sub "${ResourceBaseName}-Pipeline"
+            RoleArn: !GetAtt PipelineServiceRole.Arn
+            ArtifactStore:
+                Type: S3
+                Location:
+                    !Ref ArtifactS3Bucket
+            Stages:
+                -
+                    Name: Source
+                    Actions:
+                        -
+                            Name: Source
+                            ActionTypeId:
+                                Category: Source
+                                Owner: AWS
+                                Version: '1'
+                                Provider: CodeCommit
+                            OutputArtifacts:
+                                -
+                                    Name: SourceArtifact
+                            Configuration:
+                                BranchName: master
+                                PollForSourceChanges: false
+                                RepositoryName: !GetAtt CodeCommitRepository.Name
+                            RunOrder: 1
+                -
+                    Name: Deploy
+                    Actions:
+                        -
+                            Name: Deploy
+                            InputArtifacts:
+                                -
+                                    Name: SourceArtifact
+                            ActionTypeId:
+                                Category: Deploy
+                                Owner: AWS
+                                Version: '1'
+                                Provider: CloudFormation
+                            Configuration:
+                                ActionMode: CREATE_UPDATE
+                                Capabilities: CAPABILITY_IAM
+                                RoleArn: !GetAtt PipelineDeployStageCFNRole.Arn
+                                StackName: !Ref DeployStageCFNStackName
+                                TemplateConfiguration: SourceArtifact::input-params.json
+                                TemplatePath: SourceArtifact::template.yml
+                            RunOrder: 1
+
+Outputs:
+    CodeCommitGitCloneCommand:
+      Description: Git clone command for CodeCommit repo
+      Value: !GetAtt CodeCommitRepository.CloneUrlHttp
