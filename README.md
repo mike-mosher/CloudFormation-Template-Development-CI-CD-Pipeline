@@ -35,11 +35,11 @@ This template creates the following:
 
 Having a CI/CD Pipeline for CloudFormation template creation is extremely useful.  You can begin building your template in the `template.yml` file in the git repo, and as each resource is added (or a small group of resources) you can do the following:
 
-    - validate the template with the following command:
+- validate the template with the following command:
 
-        `aws cloudformation validate-template --template-body file://template.yml`
+    `aws cloudformation validate-template --template-body file://template.yml`
 
-    - commit changes to the local git repo, and then push the changes to the remote repo with `git push`
+- commit changes to the local git repo, and then push the changes to the remote repo with `git push`
 
 Once the CodeCommit repo has a new commit, the Pipeline is triggered and will perform an update-stack operation on the CloudFormation stack for this template.
 
